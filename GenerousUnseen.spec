@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+# Paths are resolved relative to this .spec's own location (SPECPATH, injected
+# by PyInstaller) so the build works from any checkout directory.
+import os
+BASE = SPECPATH
 
 a = Analysis(
-    ['e:\\Test\\Testing\\capture_gui.py'],
+    [os.path.join(BASE, 'capture_gui.py')],
     pathex=[],
     binaries=[],
-    datas=[('e:\\Test\\Testing\\icon.ico', '.')],
+    datas=[(os.path.join(BASE, 'icon.ico'), '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -36,5 +40,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=True,
-    icon=['e:\\Test\\Testing\\icon.ico'],
+    icon=[os.path.join(BASE, 'icon.ico')],
 )

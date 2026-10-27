@@ -444,7 +444,12 @@ class App:
         # HWNDs the user has Activated this session — the set the re-assert loop
         # keeps excluded. Per-window (not per-process), so activating one window
         # never pulls in sibling windows of the same app.
-        self._activated = set()
+        self._activated = {}   # hwnd -> owning PID captured at activation time.
+        # Mapping (not a bare set) so the re-assert loop can detect HWND reuse:
+        # Windows recycles handle values, so closing an Activated app and opening
+        # a new one often hands the same HWND to an unrelated window. Re-applying
+        # exclusion to that reused handle would exclude a window the user never
+        # activated (and render it black on MPO GPUs).
         self.style = ttk.Style()
 
         self._build_ui()
@@ -492,7 +497,11 @@ class App:
         e.pack(side="left", padx=(0, 6), pady=4)
 
         # ---- fixed "this app itself" row (always visible) ----
-        self.hide_self_var = tk.BooleanVar(value=True)
+        # Default OFF: self-exclusion makes this window invisible to capture, but
+        # on GPUs with Multiplane Overlay (and in many capture tools) an excluded
+        # window paints as a solid BLACK rectangle. Starting excluded therefore
+        # showed the app as a black box. Opt in via the toggle / Ctrl+Alt+A only.
+        self.hide_self_var = tk.BooleanVar(value=False)
         selfrow = tk.Frame(self.root, bg=p["surface"])
         selfrow.pack(fill="x", padx=14)
         self.self_row = selfrow
@@ -742,13 +751,23 @@ class App:
         try:
             if self._activated and not self._panic and not self._reassert_busy:
                 own = self._own_hwnd()
-                visible = {w["hwnd"] for w in core.list_windows()}
-                # Drop Activated windows that have truly closed, but keep ones only
-                # hidden from view by the boss key (restored later by _reactivate).
-                self._activated &= visible | set(self._hidden_from_view)
+                pid_by_hwnd = {w["hwnd"]: w["pid"] for w in core.list_windows()}
+                visible = set(pid_by_hwnd)
+                hidden = set(self._hidden_from_view)
+                # Drop Activated windows that have truly closed, AND windows whose
+                # HWND Windows has recycled for a DIFFERENT process (owning PID no
+                # longer matches the one captured at activation) — re-applying to a
+                # reused handle would exclude a brand-new window the user never
+                # activated, which shows as black on MPO GPUs. Keep windows only
+                # hidden from view by the boss key (restored later by _reactivate);
+                # those keep their real HWND while hidden, so no reuse occurs.
+                self._activated = {
+                    h: pid for h, pid in self._activated.items()
+                    if (h in visible and pid_by_hwnd[h] == pid) or h in hidden
+                }
                 targets = [
-                    h for h in self._activated
-                    if h != own and h in visible
+                    h for h, pid in self._activated.items()
+                    if h != own and h in visible and pid_by_hwnd[h] == pid
                     and core.get_affinity(h) not in (
                         core.WDA_EXCLUDEFROMCAPTURE, core.WDA_MONITOR)
                 ]
@@ -965,9 +984,9 @@ class App:
         except OSError as e:
             self.status.set(f"Failed on \"{title}\": {e} (try running as admin)")
         if activated is True:
-            self._activated.add(hwnd)
+            self._activated[hwnd] = core.get_pid(hwnd)
         elif activated is False:
-            self._activated.discard(hwnd)
+            self._activated.pop(hwnd, None)
         self.refresh(force=True)
 
     def hide_selected(self):

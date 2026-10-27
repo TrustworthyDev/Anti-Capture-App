@@ -137,9 +137,11 @@ Terminology used throughout:
 - **Run in background** — hide the controller window (see *Running in the
   background* below).
 - **Quit** — exit GenerousUnseen completely.
-- **Activate this app itself** (checkbox, default **on**) — excludes
+- **Activate this app itself** (checkbox, default **off**) — excludes
   GenerousUnseen's own window from capture so the controller doesn't show up in
-  your share.
+  your share. Off by default because an excluded window can render as a solid
+  **black rectangle** on some GPUs (Multiplane Overlay) and in many capture
+  tools; turn it on only if you need the controller hidden from your share.
 
 GenerousUnseen has **no taskbar button and no alt-tab entry** (it's a tool
 window), so it stays out of the way; bring it up with

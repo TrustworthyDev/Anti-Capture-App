@@ -183,6 +183,18 @@ def list_windows():
     return results
 
 
+def get_pid(hwnd):
+    """Return the PID that owns `hwnd`, or 0. Lightweight (no OpenProcess).
+
+    Used to detect HWND reuse: Windows recycles handle values, so a window the
+    user Activated can close and its HWND be handed to an unrelated new window.
+    A PID captured at activation time no longer matching means the handle was
+    reused and must not be re-excluded."""
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value
+
+
 def get_affinity(hwnd):
     """Return the current display affinity (int) or None if it can't be read.
     Reading cross-process may fail on some systems; callers should tolerate None."""
